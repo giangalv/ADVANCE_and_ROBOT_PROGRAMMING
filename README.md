@@ -16,3 +16,7 @@ inspection console: receiving from motors the hoist positions while moving, and 
 motor x: simulating the motion along x axis, receiving command and sending back the real time position including simulated errors.
 
 motor z: similar to motor x.
+
+RUN IT on the console with:
+
+-> sh compile.sh and then -> sh run.sh
