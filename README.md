@@ -1,5 +1,7 @@
 # ADVANCE_and_ROBOT_PROGRAMMING
 
+AUTHOR: Galvagni Gianluca & Demaria CLaudio
+
 1° ASSIGNMENT -> overhead crane simulation. 
 
 The code to design, develop, test and deploy is an interactive simulator  of hoist with 2 d.o.f, in which two different consoles allow the user to activate the hoist.
