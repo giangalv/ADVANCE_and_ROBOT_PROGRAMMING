@@ -38,8 +38,11 @@ int write_log(char *to_write, char type){
         sprintf(log_buffer, "%d:%d:%d: WORLD proces error: %s\n", tm.tm_hour, tm.tm_min, tm.tm_sec, to_write);
     }
     // If type is 'b' write button pressed
-    else if (type == 'i'){
-        sprintf(log_buffer, "%d:%d:%d: WORLD preces position: %s\n", tm.tm_hour, tm.tm_min, tm.tm_sec, to_write);
+    else if (type == 'x'){
+        sprintf(log_buffer, "%d:%d:%d: X_WORLD preces position: %s\n", tm.tm_hour, tm.tm_min, tm.tm_sec, to_write);
+    }
+    else if (type == 'z'){
+        sprintf(log_buffer, "%d:%d:%d: Z_WORLD preces position: %s\n", tm.tm_hour, tm.tm_min, tm.tm_sec, to_write);
     }
 
     // Write on log file
@@ -302,6 +305,20 @@ int main(int argc, char const *argv[]){
             if (n == -1 || n != strlen(z_pos)){
                 // If error occurs while writing on the FIFO
                 error = 1;
+                break;
+            }
+
+            // write the position to the log file
+            int ret = write_log(x_pos, 'x');
+            if (ret){
+                // If error occurs while writing on log file
+                error = 2;
+                break;
+            }
+            ret = write_log(z_pos, 'z');
+            if (ret){
+                // If error occurs while writing on log file
+                error = 2;
                 break;
             }
         }

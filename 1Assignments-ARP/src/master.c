@@ -37,7 +37,6 @@ int const MAX_SLEEP = 60; // 60 seconds
   pid_t pid_motor_z;
   pid_t pid_world;
   pid_t pid_insp;
-  pid_t pid_mstr;
 
   // Variable for the status of the child processes
   int status;
@@ -124,10 +123,13 @@ time_t get_last_modified(char *file_name){
 int watchdog(){
 
   // set an array of the name of all log files
-  char *log_array[5] = {"./log/log_command.txt", "./log/log_motor_x.txt", "./log/log_motor_z.txt", "./log/log_world.txt", "./log/log_inspection.txt"};
+  char *log_array[5] = {"./log/log_command.txt", 
+    "./log/log_motor_x.txt", "./log/log_motor_z.txt", 
+      "./log/log_world.txt", "./log/log_inspection.txt"};
 
   // set an array of the PID of all child processes
-  pid_t pid_array[5] = {pid_cmd, pid_motor_x, pid_motor_z, pid_world, pid_insp};
+  pid_t pid_array[5] = {pid_cmd, pid_motor_x, pid_motor_z, 
+    pid_world, pid_insp};
 
   // FLAG to check if the file is modified
   // if it's 1, it means that the file is not modified
@@ -137,7 +139,7 @@ int watchdog(){
   // variable to store the time of the last modification of the file
   time_t last_mod;
 
-  // Variable to store the seconds since the last modification of the file
+  // set the variable to store the changing time 
   int seconds_since_mod = 0;
 
   // infinite loop
@@ -145,37 +147,41 @@ int watchdog(){
 
     // get the current time
     time_t now = time(NULL);
-    
-    // for every log file
+
+    // for every log file check if it was modified in the last MAX_SLEEP/2 seconds
     for(int i = 0; i < 5; i++){
 
       // get the last modification time of the log file
       last_mod = get_last_modified(log_array[i]);
-
+      
       // if the last_mod is -1, it means that the system call failed
       if(last_mod == -1){
         // kill all child processes
         kill_all();
         // Print error message
-        perror("Error while getting the last modification time of the file...");
+        fprintf(stderr, "Error while getting the last modification time of the file %s: %s\n",
+           log_array[i], strerror(errno));
         return -1;
       }
 
-      // check if the last modification was in the last 2 seconds
-      if (now - seconds_since_mod > 2){
+      if (difftime(now, last_mod) > MAX_SLEEP/2){
         // if the file was not modified
-        flag_mod = 1;
-      }
-      else {
-        // if the file was modified
-        flag_mod = 0;
-        seconds_since_mod = 0;
+        flag_mod += 1;
       }
     }
 
-    // if the file was not modified, increment the seconds since the last modification
-    if (flag_mod == 1){
-      seconds_since_mod += 2;
+    // if the file was not modified increase the seconds since the last modification
+    if (flag_mod > 0){
+      // if the file was not modified
+      seconds_since_mod++; 
+
+      // set the flag to 0
+      flag_mod = 0;
+    }
+    else{
+
+      // if the file was modified, set the seconds since the last modification to 0
+      seconds_since_mod = 0;
     }
 
     // Check if child processes terminated unexpectedly
@@ -185,22 +191,21 @@ int watchdog(){
         // kill all child processes
         kill_all();
         // Print error message
-        perror("Error while waiting for child processes...");
+        fprintf(stderr, "Error the child process %d terminated unexpectedly...\n", pid_array[i]);
         return -1;
       }
     }
-
-    // if the couter is greater than MAX_SLEEP seconds, kill all child processes
-    if(seconds_since_mod > MAX_SLEEP){
+    // if the file was not modified for more than MAX_SLEEP/2 seconds (
+    //  add to the MAX_SLEEP/2 seconds of the alarm it results in MAX_SLEEP seconds)
+    if (seconds_since_mod > MAX_SLEEP/2){
       // kill all child processes
       kill_all();
-      // Print error message
-      perror("Error the time of the last modification is GREATER than MAX_SLEEP seconds ago...");
+
       return 1;
     }
 
-    // sleep for 2 second
-    sleep(2);
+    // sleep for 1 second
+    sleep(1);
   }
 }
 

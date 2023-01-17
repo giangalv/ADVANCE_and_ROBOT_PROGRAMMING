@@ -1,4 +1,4 @@
-// AUTHOR: Dmaria Claudio & Galvagni Gianluca
+// AUTHOR: Demaria Claudio & Galvagni Gianluca
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -16,8 +16,8 @@ int stop_flag = 0;
 int reset_flag = 0;
 
 // Constants to store the minimum and maximum x position
-const float x_min = 0.0;
-const float x_max = 40.0;
+const float X_MIN = 0.0;
+const float X_MAX = 40.0;
 
 // File descriptor for the log file
 int log_fd;
@@ -42,8 +42,8 @@ char log_buffer[100];
 volatile int error = 0;
 
 // Signal handlers
-void reset_handler(int signo);
-void stop_handler(int signo);
+void myhandler(int signo);
+
 
 // Function to write on log
 int write_log(char *to_write, char type)
@@ -79,142 +79,38 @@ int write_log(char *to_write, char type)
 }
 
 // Stop signal handler
-void stop_handler(int signo)
-{
-    if (signo == SIGUSR1)
-    {
+void myhandler(int signo){
+    if (signo == SIGUSR1){
+
         // Setting stop_flag to true
         stop_flag = 1;
+        // Setting reset_flag to false
+        reset_flag = 0;
 
-        // Log that the process has received a signal
-        if (error = write_log("STOP", 's'))
-        {
+        if (error = write_log("STOP", 's')){
             return;
         }
 
-        // Stop the motor
         vx = 0;
-
-        // Listen for the next signal
-        if (signal(SIGUSR1, stop_handler) == SIG_ERR || signal(SIGUSR2, reset_handler) == SIG_ERR)
-        {
-            // If error occurs, set handler_error to 1
-            error = 1;
-            return;
-        }
     }
-}
-
-// Reset signal handler
-void reset_handler(int signo)
-{
-    if (signo == SIGUSR2)
-    {
-        // Setting stop_flag to false
-        stop_flag = 0;
+    else if (signo == SIGUSR2){
 
         // Setting reset_flag to true
         reset_flag = 1;
+        // Setting stop_flag to false
+        stop_flag = 0;
 
-        // Log that the process has received a signal
-        if (error = write_log("RESET", 's'))
-        {
-            // If log fails, return
+        if (error = write_log("RESET", 's')){
             return;
         }
+    }
 
-        // Variable to count the loops
-        int loops = 0;
-
-        // Setting velocity to -4
-        vx = -4;
-
-        // Listen for stop signal
-        if (signal(SIGUSR1, stop_handler) == SIG_ERR)
-        {
-            // If error occurs, set handler_error to 1
-            error = 1;
-            return;
-        }
-
-        // Looping for 5 seconds
-        while (loops < 10)
-        {
-            // Setting up the select to read from the pipe and ignore the read values
-            // Set the file descriptors to be monitored
-            fd_set readfds;
-            FD_ZERO(&readfds);
-            FD_SET(fd_vx, &readfds);
-
-            // Set the timeout
-            struct timeval timeout;
-            timeout.tv_sec = 0;
-            timeout.tv_usec = 500000;
-
-            // Wait for the file descriptor to be ready
-            int ready = select(fd_vx + 1, &readfds, NULL, NULL, &timeout);
-
-            // Check if the file descriptor is ready
-            if (ready > 0)
-            {
-                // Read the velocity increment
-                char buffer[2];
-                if (read(fd_vx, buffer, 2) == -1)
-                {
-                    // If error occurs, set handler_error to 1
-                    error = 1;
-                    return;
-                }
-            }
-            // Error handling
-            else if (ready < 0 && errno != EINTR)
-            {
-                // If error occurs, set handler_error to 1
-                error = 1;
-                return;
-            }
-
-            // If reset was interrupted by a stop, exit the handler
-            if (stop_flag)
-            {
-                return;
-            }
-
-            // Updating position
-            x_pos += vx;
-
-            // If position is lower than 0, make it 0
-            if (x_pos < 0)
-            {
-                x_pos = 0;
-            }
-
-            // Writing position to pipe
-            char x_pos_str[10];
-            sprintf(x_pos_str, "%f", x_pos);
-
-            int m = write(fdx_pos, x_pos_str, strlen(x_pos_str) + 1);
-            if (m == -1 || m != strlen(x_pos_str) + 1)
-            {
-                // If error occurs, set handler_error to 1
-                error = 1;
-                return;
-            }
-
-            // Increment loops
-            loops++;
-        }
-
-        // Set velocity to 0
-        vx = 0;
-
-        // Listen for the next signal
-        if (signal(SIGUSR1, stop_handler) == SIG_ERR || signal(SIGUSR2, reset_handler) == SIG_ERR)
-        {
-            // If error occurs, set handler_error to 1
-            error = 1;
-            return;
-        }
+    // listen for signals
+    if (signal(SIGUSR1, myhandler) == SIG_ERR || signal(SIGUSR2, myhandler) == SIG_ERR){
+        // If error occurs while setting the signal handler
+        // Log the error
+        error = write_log(strerror(errno), 'e');
+        return;
     }
 }
 
@@ -273,7 +169,7 @@ int main(int argc, char const *argv[])
     }
 
     // Listen for signals
-    if (signal(SIGUSR1, stop_handler) == SIG_ERR || signal(SIGUSR2, reset_handler) == SIG_ERR)
+    if (signal(SIGUSR1, myhandler) == SIG_ERR || signal(SIGUSR2, myhandler) == SIG_ERR)
     {
         // If error occurs while setting the signal handlers
         // Log the error
@@ -332,20 +228,23 @@ int main(int argc, char const *argv[])
             
             if (strcmp(str, Vp) == 0){
                 vx += 1;
+                if (vx > VELOCITY){
+                    vx = +VELOCITY;
+                }
             } 
             else if (strcmp(str, Vm) == 0){
                 vx -= 1;
+                if (vx < -VELOCITY){
+                    vx = -VELOCITY;
+                }
             } 
             else if (strcmp(str, Vzero) == 0){
                 vx = 0;
             }
-            
-            // set the max and min velocity
-            if (vx > VELOCITY){
-                vx = +VELOCITY;
-            }
-            else if (vx < -VELOCITY){
-                vx = -VELOCITY;
+            else{
+                // If the string is not recognized
+                error = 1;
+                break;
             }
         }
         // Error handling
@@ -357,20 +256,20 @@ int main(int argc, char const *argv[])
         }
 
         // Update the position
-        float pos_increment = vx * 0.5;
-        float new_x_pos = x_pos + pos_increment;
+        float delta_x = vx * 0.5;
+        float new_x_pos = x_pos + delta_x;
 
         // Check if the position is out of bounds
-        if (new_x_pos < x_min)
+        if (new_x_pos < X_MIN)
         {
-            new_x_pos = x_min;
+            new_x_pos = X_MIN;
 
             // Stop the motor
             vx = 0;
         }
-        else if (new_x_pos > x_max)
+        else if (new_x_pos > X_MAX)
         {
-            new_x_pos = x_max;
+            new_x_pos = X_MAX;
 
             // Stop the motor
             vx = 0;
@@ -391,23 +290,6 @@ int main(int argc, char const *argv[])
             char x_pos_str[10];
             sprintf(x_pos_str, "%f", x_pos);
 
-            // If reset signal was received,
-            if (reset_flag)
-            {
-                vx = 0;
-                x_pos = 0.0;
-                // Skip writing to the FIFO
-                continue;
-            }
-
-            // If stop signal was received
-            if (stop_flag)
-            {
-                vx = 0;
-                // Skip writing to the FIFO
-                continue;
-            }
-
             int m = write(fdx_pos, x_pos_str, strlen(x_pos_str) + 1);
             if (m == -1 || m != strlen(x_pos_str) + 1)
             {
@@ -415,6 +297,42 @@ int main(int argc, char const *argv[])
                 error = 1;
                 break;
             }
+        }
+
+        // If reset signal was received,
+        if (reset_flag)
+        {
+            // Reset the position
+            while (x_pos > X_MIN)
+            {
+                vx = -VELOCITY;
+                x_pos += vx * 0.5;
+
+                // Write the position
+                char x_pos_str[10];
+                sprintf(x_pos_str, "%f", x_pos);
+
+                int m = write(fdx_pos, x_pos_str, strlen(x_pos_str) + 1);
+                if (m == -1 || m != strlen(x_pos_str) + 1)
+                {
+                    // If error occurs while writing to the FIFO
+                    error = 1;
+                    break;
+                }
+            }
+
+            vx = 0;
+            x_pos = 0.0;
+            // Skip writing to the FIFO
+            continue;
+        }
+
+        // If stop signal was received
+        if (stop_flag)
+        {
+            vx = 0;
+            // Skip writing to the FIFO
+            continue;
         }
     }
 

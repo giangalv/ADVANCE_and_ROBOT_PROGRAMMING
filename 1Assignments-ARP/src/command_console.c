@@ -81,7 +81,7 @@ int main(int argc, char const *argv[])
 {
 
     // Open the log file
-    log_fd = open("./log/command_log.txt", O_WRONLY | O_APPEND | O_CREAT, 0666);
+    log_fd = open("./log/log_command.txt", O_WRONLY | O_APPEND | O_CREAT, 0666);
     if (log_fd < 0){
         perror("ERROR opening log file");
         return -1;

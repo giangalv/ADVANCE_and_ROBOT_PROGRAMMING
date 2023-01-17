@@ -1,4 +1,4 @@
-// AUTHOR: Dmaria Claudio & Galvagni Gianluca
+// AUTHOR: Demaria Claudio & Galvagni Gianluca
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -42,8 +42,7 @@ char log_buffer[100];
 volatile int error = 0;
 
 // Signal handlers
-void reset_handler(int signo);
-void stop_handler(int signo);
+void myhandler(int signo);
 
 // Function to write on log
 int write_log(char *to_write, char type)
@@ -78,143 +77,39 @@ int write_log(char *to_write, char type)
     return 0;
 }
 
-// Stop signal handler
-void stop_handler(int signo)
-{
-    if (signo == SIGUSR1)
-    {
+// Function to handle the interrupt signal
+void myhandler(int signo){
+    if (signo == SIGUSR1){
+
         // Setting stop_flag to true
         stop_flag = 1;
+        // Setting reset_flag to false
+        reset_flag = 0;
 
-        // Log that the process has received a signal
-        if (error = write_log("STOP", 's'))
-        {
+        if (error = write_log("STOP", 's')){
             return;
         }
 
-        // Stop the motor
         vz = 0;
-
-        // Listen for the next signal
-        if (signal(SIGUSR1, stop_handler) == SIG_ERR || signal(SIGUSR2, reset_handler) == SIG_ERR)
-        {
-            // If error occurs, set handler_error to 1
-            error = 1;
-            return;
-        }
     }
-}
-
-// Reset signal handler
-void reset_handler(int signo)
-{
-    if (signo == SIGUSR2)
-    {
-        // Setting stop_flag to false
-        stop_flag = 0;
+    else if (signo == SIGUSR2){
 
         // Setting reset_flag to true
         reset_flag = 1;
+        // Setting stop_flag to false
+        stop_flag = 0;
 
-        // Log that the process has received a signal
-        if (error = write_log("RESET", 's'))
-        {
-            // If log fails, return
+        if (error = write_log("RESET", 's')){
             return;
         }
+    }
 
-        // Variable to count the loops
-        int loops = 0;
-
-        // Setting velocity to -4
-        vz = -4;
-
-        // Listen for stop signal
-        if (signal(SIGUSR1, stop_handler) == SIG_ERR)
-        {
-            // If error occurs, set handler_error to 1
-            error = 1;
-            return;
-        }
-
-        // Looping for 5 seconds
-        while (loops < 10)
-        {
-            // Setting up the select to read from the pipe and ignore the read values
-            // Set the file descriptors to be monitored
-            fd_set readfds;
-            FD_ZERO(&readfds);
-            FD_SET(fd_vz, &readfds);
-
-            // Set the timeout
-            struct timeval timeout;
-            timeout.tv_sec = 0;
-            timeout.tv_usec = 500000;
-
-            // Wait for the file descriptor to be ready
-            int ready = select(fd_vz + 1, &readfds, NULL, NULL, &timeout);
-
-            // Check if the file descriptor is ready
-            if (ready > 0)
-            {
-                // Read the velocity increment
-                char buffer[2];
-                if (read(fd_vz, buffer, 2) == -1)
-                {
-                    // If error occurs, set handler_error to 1
-                    error = 1;
-                    return;
-                }
-            }
-            // Error handling
-            else if (ready < 0 && errno != EINTR)
-            {
-                // If error occurs, set handler_error to 1
-                error = 1;
-                return;
-            }
-
-            // If reset was interrupted by a stop, exit the handler
-            if (stop_flag)
-            {
-                return;
-            }
-
-            // Updating position
-            z_pos += vz;
-
-            // If position is lower than 0, make it 0
-            if (z_pos < 0)
-            {
-                z_pos = 0;
-            }
-
-            // Writing position to pipe
-            char z_pos_str[10];
-            sprintf(z_pos_str, "%f", z_pos);
-
-            int m = write(fdz_pos, z_pos_str, strlen(z_pos_str) + 1);
-            if (m == -1 || m != strlen(z_pos_str) + 1)
-            {
-                // If error occurs, set handler_error to 1
-                error = 1;
-                return;
-            }
-
-            // Increment loops
-            loops++;
-        }
-
-        // Set velocity to 0
-        vz = 0;
-
-        // Listen for the next signal
-        if (signal(SIGUSR1, stop_handler) == SIG_ERR || signal(SIGUSR2, reset_handler) == SIG_ERR)
-        {
-            // If error occurs, set handler_error to 1
-            error = 1;
-            return;
-        }
+    // listen for signals
+    if (signal(SIGUSR1, myhandler) == SIG_ERR || signal(SIGUSR2, myhandler) == SIG_ERR){
+        // If error occurs while setting the signal handler
+        // Log the error
+        error = write_log(strerror(errno), 'e');
+        return;
     }
 }
 
@@ -273,7 +168,7 @@ int main(int argc, char const *argv[])
     }
 
     // Listen for signals
-    if (signal(SIGUSR1, stop_handler) == SIG_ERR || signal(SIGUSR2, reset_handler) == SIG_ERR)
+    if (signal(SIGUSR1, myhandler) == SIG_ERR || signal(SIGUSR2, myhandler) == SIG_ERR)
     {
         // If error occurs while setting the signal handlers
         // Log the error
@@ -294,9 +189,8 @@ int main(int argc, char const *argv[])
     // Loop until handler_error is set to true
     while (!error)
     {
-        // Setting signal falgs to false
-        stop_flag = 0;
-        reset_flag = 0;
+        // Unique flag for reset and stop
+        int flag = 0;
 
         // Boolean to check if the position has changed
         int pos_changed = 0;
@@ -329,23 +223,26 @@ int main(int argc, char const *argv[])
 
             str[nbytes - 1] = '\0';
 
-            
+            // Check the meaning of the pipe and change the velocity accordingly
             if (strcmp(str, Vp) == 0){
                 vz += 1;
+                if (vz > VELOCITY){
+                    vz = +VELOCITY;
+                }
             } 
             else if (strcmp(str, Vm) == 0){
                 vz -= 1;
+                if (vz < -VELOCITY){
+                    vz = -VELOCITY;
+                }
             } 
             else if (strcmp(str, Vzero) == 0){
                 vz = 0;
             }
-            
-            // set the max and min velocity
-            if (vz > VELOCITY){
-                vz = +VELOCITY;
-            }
-            else if (vz < -VELOCITY){
-                vz = -VELOCITY;
+            else{
+                // If the string is not recognized
+                error = 1;
+                break;
             }
         }
         // Error handling
@@ -357,8 +254,8 @@ int main(int argc, char const *argv[])
         }
 
         // Update the position
-        float pos_increment = vz * 0.5;
-        float new_z_pos = z_pos + pos_increment;
+        float delta_z = vz * 0.5;
+        float new_z_pos = z_pos + delta_z;
 
         // Check if the position is out of bounds
         if (new_z_pos < Z_MIN)
@@ -391,23 +288,6 @@ int main(int argc, char const *argv[])
             char z_pos_str[10];
             sprintf(z_pos_str, "%f", z_pos);
 
-            // If reset signal was received,
-            if (reset_flag)
-            {
-                vz = 0;
-                z_pos = 0.0;
-                // Skip writing to the FIFO
-                continue;
-            }
-
-            // If stop signal was received
-            if (stop_flag)
-            {
-                vz = 0;
-                // Skip writing to the FIFO
-                continue;
-            }
-
             int m = write(fdz_pos, z_pos_str, strlen(z_pos_str) + 1);
             if (m == -1 || m != strlen(z_pos_str) + 1)
             {
@@ -415,6 +295,41 @@ int main(int argc, char const *argv[])
                 error = 1;
                 break;
             }
+        }
+        // If reset signal was received,
+        if (reset_flag)
+        {
+            // Reset the position
+            while (z_pos > Z_MIN)
+            {
+                vz = -VELOCITY;
+                z_pos += vz * 0.5;
+
+                // Write the position
+                char z_pos_str[10];
+                sprintf(z_pos_str, "%f", z_pos);
+
+                int m = write(fdz_pos, z_pos_str, strlen(z_pos_str) + 1);
+                if (m == -1 || m != strlen(z_pos_str) + 1)
+                {
+                    // If error occurs while writing to the FIFO
+                    error = 1;
+                    break;
+                }
+            }
+            
+            vz = 0;
+            z_pos = 0.0;
+            // Skip writing to the FIFO
+            continue;
+        }
+
+        // If stop signal was received
+        if (stop_flag)
+        {
+            vz = 0;
+            // Skip writing to the FIFO
+            continue;
         }
     }
 
