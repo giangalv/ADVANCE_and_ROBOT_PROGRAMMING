@@ -12,7 +12,7 @@ The simulator requires (at least) the following 5 processes:
 
 watchdog: it checks the previous 4 processes periodically, and sends a reset (like the R button) in case all processes did nothing (no computation, no motion, no input/output) for a certain time, say, 60 seconds.
 
-command console: reading the 6 commands, using keyboard keys.
+command console: reading the 6 commands, using mouse to click bottons.
 
 inspection console: receiving from motors the hoist positions while moving, and reporting on the screen somehow (free choice); the inspection console manages the S ad R buttons as well (simulated in a free way using the keyboard).
 
