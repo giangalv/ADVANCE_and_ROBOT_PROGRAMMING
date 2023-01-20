@@ -1,7 +1,0 @@
-18:7:5 - COMMAND process botton pressed: Horizontal Speed Increased
-18:7:9 - COMMAND process botton pressed: Vertical Speed Increased
-18:7:10 - COMMAND process botton pressed: Vertical Speed Increased
-18:7:13 - COMMAND process botton pressed: Vertical Motor Stopped
-18:7:16 - COMMAND process botton pressed: Horizontal Speed Increased
-18:7:36 - COMMAND process botton pressed: Horizontal Speed Increased
-18:7:38 - COMMAND process botton pressed: Horizontal Speed Increased
