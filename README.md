@@ -10,9 +10,9 @@ In the octagonal box there are two motors mx and mz, which displace the hoist al
 
 The simulator requires (at least) the following 5 processes:
 
-watchdog: it checks the previous 4 processes periodically, and sends a reset (like the R button) in case all processes did nothing (no computation, no motion, no input/output) for a certain time, say, 60 seconds.
+<watchdog:> it checks the previous 4 processes periodically, and sends a reset (like the R button) in case all processes did nothing (no computation, no motion, no input/output) for a certain time, say, 60 seconds.
 
-command console: reading the 6 commands, using mouse to click push buttons.
+> command console: reading the 6 commands, using mouse to click push buttons.
 
 motor x: simulating the motion along x axis, receiving command and sending to the world the position x.
 
