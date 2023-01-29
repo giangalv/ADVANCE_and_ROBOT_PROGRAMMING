@@ -11,6 +11,8 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <time.h>
+#include <sys/stat.h>
+#include <string.h>
 
 // PIDs of the child processes
 pid_t pid_procA;

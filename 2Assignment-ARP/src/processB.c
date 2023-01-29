@@ -1,31 +1,40 @@
-// Group: CDGG
-// Authors:
-// Claudio Demaria S5433737
-// Gianluca Galvagni S5521188
-
 #include "./../include/processB_utilities.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
-#include <sys/shm.h>
-#include <sys/stat.h>
 #include <sys/mman.h>
-#include <time.h>
 #include <bmpfile.h>
 #include <math.h>
+#include <time.h>
 #include <semaphore.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <errno.h>
 
 // Define the size of the shared memory
-const int width = 1600;
-const int height = 600;
-const int depth = 4;
+#define WIDTH 1600
+#define HEIGHT 600
+#define DEPTH 4
 
-// Define the struct of the shared memory
+// Define struct for shared memory and variables
 struct shared
 {
-    int m[1600][600];
+    int x;
+    int y;
+    int m[WIDTH][HEIGHT];
 };
+
+size_t SHM_SIZE = sizeof(struct shared);
+
+// Pointer to the shared memory
+struct shared *shm_ptr;
+
+// Set the color of the circle (0 - 255)
+const u_int8_t RED = 0;
+const u_int8_t GREEN = 0;
+const u_int8_t BLUE = 255;
+const u_int8_t ALPHA = 0;
 
 // Define the semaphores
 sem_t *semaphore;
@@ -33,53 +42,76 @@ sem_t *semaphore2;
 
 // Buffer to store the string to write to the log file
 char log_buffer[100];
-
 // File descriptor for the log file
 int log_fd;
 
-// Function to draw a blue circle
-void draw_blue_circle(int radius,int x,int y, bmpfile_t *bmp) {
-    // Define the color of the circle
-    rgb_pixel_t pixel = {255, 0, 0, 0};
+void initialize_shared() {
+    shm_ptr = (struct shared *) calloc(1, sizeof(struct shared));
+}
+
+// Function to draw a circle
+void draw_my_circle(int radius, int x, int y, bmpfile_t *bmp, rgb_pixel_t color) {
+    // Define the center of the circle
+    int centerX = x * 20;
+    int centerY = y * 20;
+
     // Loop over the pixels of the circle
-    for(int i = -radius; i <= radius; i++) {
-        for(int j = -radius; j <= radius; j++) {
-            // If distance is smaller, point is within the circle
-            if(sqrt(i*i + j*j) < radius) {
-                /*
-                * Color the pixel at the specified (x,y) position
-                * with the given pixel values
-                */
-                bmp_set_pixel(bmp, x*20 + i, y*20 + j, pixel);
+    for (int i = centerX - radius; i <= centerX + radius; i++) {
+        for (int j = centerY - radius; j <= centerY + radius; j++) {
+            if (pow(i - centerX, 2) + pow(j - centerY, 2) <= pow(radius, 2)) {
+                // Color the pixel at the specified (x,y) position with the given pixel values
+                bmp_set_pixel(bmp, i, j, color);
             }
         }
     }
 }
 
-// Function to cancel the blue circle
-void cancel_blue_circle(int radius,int x,int y, bmpfile_t *bmp) {
+// Function to clear the circle
+void clear_circle(int radius, int x, int y, bmpfile_t *bmp) {
+    // Define the center of the circle
+    int centerX = x * 20;
+    int centerY = y * 20;
     // Define the color of the circle
-    rgb_pixel_t pixel = {255, 255, 255, 0};
+    rgb_pixel_t color = {255, 255, 255, 0}; // White
+
     // Loop over the pixels of the circle
-    for(int i = -radius; i <= radius; i++) {
-        for(int j = -radius; j <= radius; j++) {
-            // If distance is smaller, point is within the circle
-            if(sqrt(i*i + j*j) < radius) {
-                /*
-                * Color the pixel at the specified (x,y) position
-                * with the given pixel values
-                */
-                bmp_set_pixel(bmp,  x*20+i,y*20+  j, pixel);
+    for (int i = centerX - radius; i <= centerX + radius; i++) {
+        for (int j = centerY - radius; j <= centerY + radius; j++) {
+            // If the pixel is inside the circle..
+            if (pow(i - centerX, 2) + pow(j - centerY, 2) <= pow(radius, 2)) {
+                // Color the pixel at the specified (x,y) position with the given pixel values
+                bmp_set_pixel(bmp, i, j, color);
             }
         }
     }
 }
 
-int main(int argc, char const *argv[])
-{
+int main(int argc, char const *argv[]) {
+
+    // File descriptor for the shared memory
+    int shm_fd;
+    // initialize the shared memory
+    initialize_shared();
+
+    // Open the shared memory
+    shm_fd = shm_open("my_shm", O_RDWR, 0666);
+    if (shm_fd == -1) {
+        perror("Error in shm_open");
+        exit(1);
+    }
+
+    // Set the size of the shared memory
+    ftruncate(shm_fd, sizeof(struct shared));
+
+    // Map the shared memory to the memory space of the process
+    shm_ptr = mmap(NULL, sizeof(struct shared), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if (shm_ptr == MAP_FAILED) {
+        perror("Error in mmap");
+        exit(1);
+    }
+
     // Open the log file
-    if ((log_fd = open("log/processB.log",O_WRONLY|O_APPEND|O_CREAT, 0666)) == -1)
-    {
+    if ((log_fd = open("log/processB.log",O_WRONLY|O_APPEND|O_CREAT, 0666)) == -1) {
         // If the file could not be opened, print an error message and exit
         perror("Error opening command file");
         exit(1);
@@ -91,33 +123,9 @@ int main(int argc, char const *argv[])
     // Initialize UI
     init_console_ui();
 
-    // Variable declaration in order to access to shared memory
-    key_t          ShmKEY;
-    int            ShmID;
-
-    // Pointer to the struct of shared memory
-    struct shared  *ShmPTR;
-
-    // Get the key of the shared memory
-    ShmKEY = ftok(".", 'x');
-
-    // Get the ID of the shared memory
-    ShmID = shmget(ShmKEY, sizeof(struct shared), 0666);
-    if (ShmID < 0) {
-        printf("*** shmget error (server) ***\n");
-        exit(1);
-    }
-
-    // Attach the shared memory to the pointer
-    ShmPTR = (struct shared *) shmat(ShmID, NULL, 0);
-    if ((int) ShmPTR == -1) {
-        printf("*** shmat error (server) ***\n");
-        exit(1);
-    }
-
     // Create the bitmap
     bmpfile_t *bmp;
-    bmp = bmp_create(width, height, depth);
+    bmp = bmp_create(WIDTH, HEIGHT, DEPTH);
     if (bmp == NULL) {
         printf("Error: unable to create bitmap\n");
         exit(1);
@@ -127,7 +135,7 @@ int main(int argc, char const *argv[])
     int center_cord = 0;
     int x_cord[600];
     int y_cord[600];
-    int y;
+    int cont;
     int y_old;
     int x_old;
 
@@ -135,7 +143,7 @@ int main(int argc, char const *argv[])
     int flag ;
 
     // Open the semaphore 1
-    semaphore = sem_open("/mysem", 0);
+    semaphore = sem_open("/my_sem1", 0);
     if (semaphore == (void*) -1)
     {
         perror("sem_open failure");
@@ -143,7 +151,7 @@ int main(int argc, char const *argv[])
     }
 
     // Open the semaphore 2
-    semaphore2 = sem_open("/mysem2", 0);
+    semaphore2 = sem_open("/my_sem2", 0);
     if (semaphore2 == (void*) -1)
     {
         perror("sem_open failure");
@@ -176,9 +184,7 @@ int main(int argc, char const *argv[])
 
         else
         {
-
             mvaddch(LINES/2, COLS/2, '0');
-
             refresh();
 
             // Wait for the semaphore 2
@@ -193,7 +199,7 @@ int main(int argc, char const *argv[])
             center_cord = 0;
 
             int i, j;
-            y = 0;
+            cont = 0;
             flag = 0;
             
             // Get the coordinates of the circles
@@ -206,27 +212,29 @@ int main(int argc, char const *argv[])
                 for (j = 0; j < 600; j++) {
 
                     // Get the coordinates of the circles from the shared memory
-                    if (ShmPTR->m[i][j] == 1)
+                    if (shm_ptr->m[i][j] == 1)
                     {
-                        x_cord[y] = j;
-                        y_cord[y] = i;
+                        x_cord[cont] = j;
+                        y_cord[cont] = i;
 
-                        if (x_cord[y] > x_cord[y-1]) {
+                        if (x_cord[cont] > x_cord[cont-1]) {
                             flag = 1;
                             break;
                         }
 
-                        y++;
+                        cont++;
                         break;
                     }
                 }
             }
 
             // Update the position of the center
-            center_cord = x_cord[y-1] + 30;
+            //center_cord = x_cord[cont-1] + 30;
+            center_cord = shm_ptr->y;
+            y_cord[cont-1] = shm_ptr->x;
 
             // Write the position of the center in the log file
-            sprintf(log_buffer, "<Process_B> Position of center updated: %s\n", asctime(info));
+            sprintf(log_buffer, "<Process_B> Position of center updated: %d - %d (%s)\n", center_cord, (int)y_cord[cont-1], asctime(info));
             if (write(log_fd, log_buffer, strlen(log_buffer)) == -1)
             {
                 perror("Error writing to log file");
@@ -234,7 +242,7 @@ int main(int argc, char const *argv[])
             }
 
             // Draw the circles
-            mvaddch(floor((int)(center_cord/20)),floor((int)(y_cord[y-1]/20)), '0');
+            mvaddch((int)center_cord,(int)y_cord[cont-1], '0');
 
             refresh();
 
@@ -242,13 +250,16 @@ int main(int argc, char const *argv[])
             sem_post(semaphore);
 
             // Cancel the circle with the coordinates of the previous loop
-            cancel_blue_circle(30,y_old,x_old,bmp);
+            clear_circle(30,y_old,x_old,bmp);
+
+            // Choose the circle color
+            rgb_pixel_t color = {RED, GREEN, BLUE, ALPHA};
 
             // Draw the circle with the coordinates of the current loop
-            draw_blue_circle(30,y_cord[y-1],center_cord,bmp);   
+            draw_my_circle(30, y_cord[cont-1], center_cord, bmp, color);   
 
             // Update the (previous) coordinates for the next loop
-            y_old = y_cord[y-1];
+            y_old = y_cord[cont-1];
             x_old = center_cord;           
         }
          
@@ -258,14 +269,17 @@ int main(int argc, char const *argv[])
     sem_close(semaphore);
     sem_close(semaphore2);
 
-    // Detach and remove the shared memory
-    shmdt((void *) ShmPTR);
-    bmp_destroy(bmp);
+    // Unmap the shared memory from the memory space of the process
+    munmap(shm_ptr, sizeof(struct shared));
+
+    // Close the shared memory
+    close(shm_fd);
 
     endwin();
 
-    // Close the log file
     close(log_fd);
 
     return 0;
 }
+
+
