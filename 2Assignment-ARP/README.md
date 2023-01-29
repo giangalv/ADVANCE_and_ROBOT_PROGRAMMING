@@ -1,10 +1,8 @@
 # ARP-Assignment2
-
-Group: CDGG  
+ 
 Authors:  
-Claudio Demaria (S5433737)  
-Gianluca Galvagni (S5521188)  
-GitHub repository: https://github.com/claudioDema99/ARP-Assignment2.git
+Claudio Demaria   
+Gianluca Galvagni   
 
 ## Description of the programs
 The project consists in the implementation of the simulated vision system through shared memory, according to the requirements specified in the PDF file of the assignment.
