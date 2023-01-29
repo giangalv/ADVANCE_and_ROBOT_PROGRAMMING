@@ -1,4 +1,4 @@
-# ARP-Assignment2
+# Assignment 2
 
 
 ## Description of the programs
