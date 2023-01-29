@@ -1,4 +1,4 @@
-# ARP-Assignment1
+# Assignment 1
 
 ## Description of the programs
 The code to design, develop, test and deploy is an interactive simulator  of hoist with 2 d.o.f, in which two different consoles allow the user to activate the hoist.
