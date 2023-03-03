@@ -67,7 +67,9 @@ Therefore the application, when launched, asks for one execution modality:
 When selecting modes 2 and 3 the application obviously asks address and port of the companion application.
 
 IP protocol: TCP
+
 data: a byte stream of char, one per key pressed.
+
 (flush data if necessary).
 
 ## How to compile and run it
