@@ -1,11 +1,21 @@
 # Assignment 3
 
 ## Description of the programs
-The project consists in the implementation of the simulated vision system through shared memory, according to the requirements specified in the PDF file of the assignment.
+The code to design, develop, test and deploy is a modified version of Assignment 2, including client/server features. We refer to this as "application". In the modified application, process B, shared memory and the second ncurses window are unchanged. Process A includes two new features:
+1. client connection toward a similar application running on a different machine in the network.
+2. server connection for a similar application running on a different machine in the network.
 
-The two processes involved in the simulation of the vision system, implemented as simple *ncurses windows*, are called **processA** and **processB** and they communicate each others with an inter-process communication pipeline, that is the shared memory (SHM).  
-The user can control the *marker* in the **processA** window using the keyboard arrow, and in the **processB** window are printed the trajectory of the movement.  
-There is also a **print button**: when the user click on it with the mouse, the program prints a *.png* image of the current position of the *marker*, and put this image into the *out* folder.
+Therefore the application, when launched, asks for one execution modality:
+1. normal, as assignment 2
+2. server: the application does not use the keyboard for input: it receives input from another application (on a different machine) running in client mode
+3. client: the application runs normally as assignment 2 and sends its keyboard input to another application (on a different machine) running in server mode
+When selecting modes 2 and 3 the application obviously asks address and port of the companion application.
+
+IP protocol: TCP
+
+data: a byte stream of char, one per key pressed.
+
+(flush data if necessary).
 
 There is also a **master** process already prepared for you, responsible of spawning the entire simulation.
 
